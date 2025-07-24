@@ -138,9 +138,7 @@ def main():
     st.subheader("📊 数据可视化")
 
     # 创建选项卡
-    tab1, tab2, tab3 = st.tabs(
-        ["💰 价格分析", "👥 用户行为", "🎯 转化分析"]
-    )
+    tab1, tab2, tab3 = st.tabs(["💰 价格分析", "👥 用户行为", "🎯 转化分析"])
 
     with tab1:
         if "直播间价格" in df.columns and "用户支付金额" in df.columns:
@@ -232,10 +230,14 @@ def main():
                         ),
                         y="成交件数/每次讲解",
                         title=f"每次讲解成交件数 ({efficiency_sort_order})",
-                        hover_data=(["SKU"] if "SKU" in df_sorted_efficiency.columns else None),
+                        hover_data=(
+                            ["SKU"] if "SKU" in df_sorted_efficiency.columns else None
+                        ),
                     )
                     fig_efficiency.update_layout(
-                        xaxis_title="SKU", yaxis_title="成交件数/每次讲解", xaxis_tickangle=-45
+                        xaxis_title="SKU",
+                        yaxis_title="成交件数/每次讲解",
+                        xaxis_tickangle=-45,
                     )
                     st.plotly_chart(fig_efficiency, use_container_width=True)
                 elif "讲解次数" in df.columns:
@@ -254,7 +256,7 @@ def main():
 
     with tab3:
         col1, col2 = st.columns(2)
-        
+
         if "商品点击-成交转化率（人数）" in df.columns:
             with col1:
                 # 转化率分布
@@ -280,12 +282,12 @@ def main():
                         xaxis_title="转化率 (%)", yaxis_title="用户支付金额 (¥)"
                     )
                     st.plotly_chart(fig_conversion_payment, use_container_width=True)
-        
+
         # 讲解效率分析
         if "成交件数/每次讲解" in df.columns:
             st.markdown("### 🎯 讲解效率分析")
             col3, col4 = st.columns(2)
-            
+
             with col3:
                 # 讲解效率分布
                 fig_efficiency_dist = px.histogram(
@@ -295,7 +297,7 @@ def main():
                     xaxis_title="成交件数/每次讲解", yaxis_title="频次"
                 )
                 st.plotly_chart(fig_efficiency_dist, use_container_width=True)
-            
+
             with col4:
                 # 讲解效率 vs 转化率（如果转化率存在）
                 if "商品点击-成交转化率（人数）" in df.columns:
