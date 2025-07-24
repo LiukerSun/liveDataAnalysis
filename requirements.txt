@@ -2,4 +2,6 @@ pandas
 openpyxl
 streamlit
 plotly
-loguru 
+loguru
+pyecharts
+streamlit-echarts 

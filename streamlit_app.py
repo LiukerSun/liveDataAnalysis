@@ -3,6 +3,10 @@ import plotly.express as px
 import plotly.graph_objects as go
 import os
 from utils import DataLoader, logger
+from pyecharts import options as opts
+from pyecharts.charts import Line
+from pyecharts.globals import ThemeType
+import streamlit.components.v1 as components
 
 # 页面配置
 st.set_page_config(
@@ -35,126 +39,159 @@ def load_and_process_data(data_source, source_type="folder"):
 
 
 def create_trend_chart(comparison_data, metric, title):
-    """创建SKU趋势折线图"""
+    """创建SKU趋势折线图 - 使用pyecharts"""
     if metric not in comparison_data:
         return None
 
     pivot_data = comparison_data[metric]
-
+    
     # 转置数据，便于绘制折线图
     trend_data = pivot_data.T
-
-    fig = go.Figure()
-
-    # 预定义一组对比度好的颜色
-    colors = [
-        "#1f77b4",
-        "#ff7f0e",
-        "#2ca02c",
-        "#d62728",
-        "#9467bd",
-        "#8c564b",
-        "#e377c2",
-        "#7f7f7f",
-        "#bcbd22",
-        "#17becf",
-        "#aec7e8",
-        "#ffbb78",
-        "#98df8a",
-        "#ff9896",
-        "#c5b0d5",
-        "#c49c94",
-        "#f7b6d3",
-        "#c7c7c7",
-        "#dbdb8d",
-        "#9edae5",
+    
+    # 精心挑选的高对比度颜色方案，便于区分多条线
+    elegant_colors = [
+        "#e60012", "#0070f3", "#00d084", "#ff6b00", "#8b5cf6", "#06b6d4",
+        "#f59e0b", "#ef4444", "#10b981", "#3b82f6", "#8b5cf6", "#f97316",
+        "#84cc16", "#06b6d4", "#f59e0b", "#ef4444", "#22c55e", "#6366f1",
+        "#ec4899", "#14b8a6", "#f97316", "#84cc16", "#8b5cf6", "#06b6d4"
     ]
-
+    
+    # 获取所有场次名称（x轴）
+    sessions = trend_data.index.tolist()
+    
+    # 创建折线图
+    line_chart = Line(init_opts=opts.InitOpts(
+        width="100%",
+        height="600px",
+        theme=ThemeType.LIGHT,
+        bg_color="#ffffff"
+    ))
+    
+    # 添加x轴
+    line_chart.add_xaxis(xaxis_data=sessions)
+    
     # 为每个SKU添加一条折线
     for i, sku in enumerate(trend_data.columns):
-        color = colors[i % len(colors)]
-
-        fig.add_trace(
-            go.Scatter(
-                x=trend_data.index,
-                y=trend_data[sku],
-                mode="lines+markers",
-                name=str(sku),
-                line=dict(width=2.5, color=color),
-                marker=dict(size=7, color=color, line=dict(width=1, color="white")),
-                hovertemplate=f"<b>{sku}</b><br>场次: %{{x}}<br>{metric}: %{{y:,.0f}}<extra></extra>",
+        color = elegant_colors[i % len(elegant_colors)]
+        values = trend_data[sku].fillna(0).tolist()
+        
+        # 根据SKU数量调整线条样式
+        line_width = 4 if len(trend_data.columns) <= 8 else 3 if len(trend_data.columns) <= 15 else 2
+        symbol_size = 10 if len(trend_data.columns) <= 8 else 8 if len(trend_data.columns) <= 15 else 6
+        
+        line_chart.add_yaxis(
+            series_name=str(sku),
+            y_axis=values,
+            color=color,
+            symbol="circle",
+            symbol_size=symbol_size,
+            is_smooth=True,
+            linestyle_opts=opts.LineStyleOpts(width=line_width, opacity=0.9),
+            itemstyle_opts=opts.ItemStyleOpts(
+                color=color, 
+                border_width=2, 
+                border_color="#ffffff",
+                opacity=0.9
+            ),
+            # 只对前5个SKU显示最值标记，避免图表过于复杂
+            markpoint_opts=opts.MarkPointOpts(
+                data=[
+                    opts.MarkPointItem(type_="max", name="最大值"),
+                    opts.MarkPointItem(type_="min", name="最小值")
+                ]
+            ) if i < 5 and len(values) > 1 else None,
+            label_opts=opts.LabelOpts(is_show=False),
+        )
+    
+    # 配置全局选项
+    line_chart.set_global_opts(
+        title_opts=opts.TitleOpts(
+            title=title,
+            title_textstyle_opts=opts.TextStyleOpts(
+                font_size=18,
+                font_weight="bold",
+                color="#333333"
+            ),
+            pos_left="center",
+            pos_top="20px"
+        ),
+        tooltip_opts=opts.TooltipOpts(
+            trigger="axis",
+            axis_pointer_type="cross",
+            background_color="rgba(245, 245, 245, 0.95)",
+            border_width=1,
+            border_color="#cccccc",
+            textstyle_opts=opts.TextStyleOpts(color="#333333", font_size=12)
+        ),
+        legend_opts=opts.LegendOpts(
+            type_="scroll",
+            orient="horizontal" if len(trend_data.columns) <= 12 else "vertical",
+            pos_left="center" if len(trend_data.columns) <= 12 else "right",
+            pos_bottom="10px" if len(trend_data.columns) <= 12 else "middle",
+            pos_right="10px" if len(trend_data.columns) > 12 else None,
+            item_gap=12 if len(trend_data.columns) <= 12 else 8,
+            textstyle_opts=opts.TextStyleOpts(font_size=11),
+            selected_mode="multiple",
+            page_button_item_gap=8,
+            page_button_gap=10
+        ),
+        xaxis_opts=opts.AxisOpts(
+            type_="category",
+            name="场次",
+            name_location="middle",
+            name_gap=25,
+            name_textstyle_opts=opts.TextStyleOpts(font_size=14, color="#666666"),
+            axisline_opts=opts.AxisLineOpts(
+                is_show=True,
+                linestyle_opts=opts.LineStyleOpts(color="#d0d0d0", width=1)
+            ),
+            axistick_opts=opts.AxisTickOpts(is_show=True),
+            axislabel_opts=opts.LabelOpts(rotate=45 if len(sessions) > 8 else 0, font_size=11),
+            splitline_opts=opts.SplitLineOpts(
+                is_show=True,
+                linestyle_opts=opts.LineStyleOpts(color="#f0f0f0", width=1, type_="dashed")
             )
-        )
-
-    # 动态调整图例位置和显示方式
-    sku_count = len(trend_data.columns)
-
-    if sku_count <= 10:
-        # SKU数量少时，显示在右侧
-        legend_config = dict(
-            orientation="v",
-            yanchor="top",
-            y=1,
-            xanchor="left",
-            x=1.01,
-            bgcolor="rgba(255,255,255,0.8)",
-            bordercolor="rgba(0,0,0,0.2)",
-            borderwidth=1,
-        )
-    else:
-        # SKU数量多时，显示在底部，并允许滚动
-        legend_config = dict(
-            orientation="h",
-            yanchor="top",
-            y=-0.1,
-            xanchor="center",
-            x=0.5,
-            bgcolor="rgba(255,255,255,0.8)",
-            bordercolor="rgba(0,0,0,0.2)",
-            borderwidth=1,
-        )
-
-    fig.update_layout(
-        title=dict(text=title, x=0.5, font=dict(size=16)),
-        xaxis_title="场次",
-        yaxis_title=metric,
-        hovermode="x unified",
-        legend=legend_config,
-        plot_bgcolor="white",
-        xaxis=dict(
-            showgrid=True,
-            gridwidth=1,
-            gridcolor="rgba(128,128,128,0.2)",
-            showline=True,
-            linewidth=1,
-            linecolor="rgba(128,128,128,0.5)",
         ),
-        yaxis=dict(
-            showgrid=True,
-            gridwidth=1,
-            gridcolor="rgba(128,128,128,0.2)",
-            showline=True,
-            linewidth=1,
-            linecolor="rgba(128,128,128,0.5)",
+        yaxis_opts=opts.AxisOpts(
+            type_="value",
+            name=metric,
+            name_location="middle",
+            name_gap=40,
+            name_textstyle_opts=opts.TextStyleOpts(font_size=14, color="#666666"),
+            axisline_opts=opts.AxisLineOpts(
+                is_show=True,
+                linestyle_opts=opts.LineStyleOpts(color="#d0d0d0", width=1)
+            ),
+            axistick_opts=opts.AxisTickOpts(is_show=True),
+            axislabel_opts=opts.LabelOpts(font_size=11),
+            splitline_opts=opts.SplitLineOpts(
+                is_show=True,
+                linestyle_opts=opts.LineStyleOpts(color="#f0f0f0", width=1, type_="dashed")
+            )
         ),
-        margin=dict(r=150 if sku_count <= 10 else 50, b=100 if sku_count > 10 else 50),
-        height=500,
+        datazoom_opts=[
+            opts.DataZoomOpts(
+                is_show=True,
+                type_="slider",
+                range_start=0,
+                range_end=100,
+                pos_bottom="60px"
+            ),
+            opts.DataZoomOpts(
+                type_="inside",
+                range_start=0,
+                range_end=100
+            )
+        ] if len(sessions) > 10 else None,
+        toolbox_opts=opts.ToolboxOpts(
+            is_show=True,
+            pos_right="20px",
+            pos_top="60px"
+        )
     )
-
-    # 如果SKU数量很多，添加图例说明
-    if sku_count > 15:
-        fig.add_annotation(
-            text=f"提示：图表显示{sku_count}个SKU，可点击图例隐藏/显示特定SKU",
-            xref="paper",
-            yref="paper",
-            x=0.5,
-            y=1.02,
-            showarrow=False,
-            font=dict(size=12, color="gray"),
-            align="center",
-        )
-
-    return fig
+    
+    # 返回图表对象用于HTML渲染
+    return line_chart
 
 
 def display_session_comparison(data_loader):
@@ -178,23 +215,20 @@ def display_session_comparison(data_loader):
 
     # SKU数量显示和筛选方式选择
     st.sidebar.info(f"总SKU数量: {len(unique_skus)}")
+    
+    # 智能默认筛选方式：如果SKU数量过多，默认使用"按表现排序"
+    default_filter = "按表现排序" if len(unique_skus) > 15 else "限制数量"
 
     filter_method = st.sidebar.radio(
         "筛选方式",
-        options=["显示全部", "手动选择", "按表现排序", "限制数量"],
-        help="选择如何筛选要在折线图中显示的SKU",
+        options=["按表现排序", "限制数量", "手动选择", "显示全部"],
+        index=0,  # 默认选择第一个选项（按表现排序）
+        help="选择如何筛选要在折线图中显示的SKU。建议使用'按表现排序'获得最佳视觉效果",
     )
 
-    selected_skus = unique_skus  # 默认显示全部
+    selected_skus = []  # 初始化为空，后续根据筛选方式确定
 
-    if filter_method == "手动选择":
-        selected_skus = st.sidebar.multiselect(
-            "选择要显示的SKU",
-            options=unique_skus,
-            default=unique_skus[:10] if len(unique_skus) > 10 else unique_skus,
-            help="手动选择要在图表中显示的SKU",
-        )
-    elif filter_method == "按表现排序":
+    if filter_method == "按表现排序":
         # 让用户选择排序指标
         metrics = list(comparison_data.keys())
         sort_metric = st.sidebar.selectbox(
@@ -205,12 +239,15 @@ def display_session_comparison(data_loader):
             "排序方向", options=["降序", "升序"], horizontal=True
         )
 
+        # 智能默认显示数量：根据总SKU数量动态调整
+        default_top_n = min(12, max(5, len(unique_skus) // 3)) if len(unique_skus) > 15 else min(8, len(unique_skus))
+        
         top_n = st.sidebar.slider(
             "显示前N个SKU",
-            min_value=5,
-            max_value=min(50, len(unique_skus)),
-            value=min(15, len(unique_skus)),
-            help="显示排序后前N个表现最好/最差的SKU",
+            min_value=3,
+            max_value=min(30, len(unique_skus)),
+            value=default_top_n,
+            help="显示排序后前N个表现最好/最差的SKU。建议不超过15个以保持图表清晰",
         )
 
         # 按照选定指标排序SKU
@@ -221,22 +258,53 @@ def display_session_comparison(data_loader):
                 ascending=(sort_direction == "升序")
             )
             selected_skus = sku_performance.head(top_n).index.tolist()
+        else:
+            selected_skus = unique_skus[:top_n]
+            
     elif filter_method == "限制数量":
+        # 智能默认数量
+        default_max = min(10, max(5, len(unique_skus) // 4)) if len(unique_skus) > 20 else min(8, len(unique_skus))
+        
         max_display = st.sidebar.slider(
             "最大显示SKU数量",
-            min_value=5,
-            max_value=min(50, len(unique_skus)),
-            value=min(20, len(unique_skus)),
-            help="限制在图表中显示的SKU数量",
+            min_value=3,
+            max_value=min(25, len(unique_skus)),
+            value=default_max,
+            help="限制在图表中显示的SKU数量。建议不超过15个以保持图表清晰",
         )
         selected_skus = unique_skus[:max_display]
+        
+    elif filter_method == "手动选择":
+        # 智能默认选择：选择前几个，但不要太多
+        default_selection = unique_skus[:min(8, len(unique_skus))]
+        
+        selected_skus = st.sidebar.multiselect(
+            "选择要显示的SKU",
+            options=unique_skus,
+            default=default_selection,
+            help="手动选择要在图表中显示的SKU。建议选择不超过15个以保持图表清晰",
+        )
+    elif filter_method == "显示全部":
+        selected_skus = unique_skus
+        if len(unique_skus) > 20:
+            st.sidebar.warning(f"⚠️ 当前将显示全部{len(unique_skus)}个SKU，图表可能较为拥挤。建议使用其他筛选方式以获得更好的视觉效果。")
 
     # 如果没有选择任何SKU，显示警告
     if not selected_skus:
         st.warning("⚠️ 请至少选择一个SKU进行显示")
         return
 
-    st.info(f"当前显示 {len(selected_skus)} 个SKU的趋势图表")
+    # 显示信息和提示
+    col_info1, col_info2 = st.columns([2, 1])
+    with col_info1:
+        st.info(f"📊 当前显示 {len(selected_skus)} 个SKU的趋势图表")
+    with col_info2:
+        if len(selected_skus) > 15:
+            st.warning("⚠️ SKU数量较多，建议减少显示数量以获得更好的视觉效果")
+        elif len(selected_skus) > 8:
+            st.info("💡 提示：可以点击图例来隐藏/显示特定的SKU线条")
+        else:
+            st.success("✅ 当前显示数量适中，图表清晰易读")
 
     # 创建选项卡
     metrics = list(comparison_data.keys())
@@ -253,13 +321,15 @@ def display_session_comparison(data_loader):
                     comparison_data[metric].index.intersection(selected_skus)
                 ]
 
-                fig = create_trend_chart(
+                chart = create_trend_chart(
                     filtered_comparison_data,
                     metric,
                     f"各SKU {metric} 趋势 (显示{len(selected_skus)}个SKU)",
                 )
-                if fig:
-                    st.plotly_chart(fig, use_container_width=True)
+                if chart:
+                    # 渲染图表为HTML
+                    chart_html = chart.render_embed()
+                    components.html(chart_html, height=650)
 
             with col2:
                 # 数据表格（显示所有数据，但高亮显示选中的）
@@ -283,23 +353,6 @@ def display_session_comparison(data_loader):
                     st.dataframe(styled_df, use_container_width=True)
                 else:
                     st.dataframe(pivot_data, use_container_width=True)
-
-                # 统计信息
-                st.write("**统计摘要**")
-                total_by_session = pivot_data.sum(axis=0)
-                st.write("各场次总计:")
-                for session, total in total_by_session.items():
-                    st.metric(session, f"{total:,.0f}")
-
-                # 选中SKU的统计信息
-                if len(selected_skus) < len(unique_skus):
-                    st.write("**选中SKU统计:**")
-                    selected_data = pivot_data.loc[
-                        pivot_data.index.intersection(selected_skus)
-                    ]
-                    selected_total_by_session = selected_data.sum(axis=0)
-                    for session, total in selected_total_by_session.items():
-                        st.metric(f"{session}(选中)", f"{total:,.0f}")
 
 
 def display_single_session_analysis(data_loader, selected_session):
