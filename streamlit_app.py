@@ -75,13 +75,23 @@ def create_trend_chart(comparison_data, metric, title):
         color = elegant_colors[i % len(elegant_colors)]
         values = trend_data[sku].fillna(0).tolist()
         
+        # 根据数据类型进行四舍五入，减少小数位数
+        rounded_values = []
+        for val in values:
+            if abs(val) >= 1000:
+                rounded_values.append(round(val, 0))  # 大数值四舍五入到整数
+            elif abs(val) >= 10:
+                rounded_values.append(round(val, 1))  # 中等数值保留1位小数
+            else:
+                rounded_values.append(round(val, 2))  # 小数值保留2位小数
+        
         # 根据SKU数量调整线条样式
         line_width = 4 if len(trend_data.columns) <= 8 else 3 if len(trend_data.columns) <= 15 else 2
         symbol_size = 10 if len(trend_data.columns) <= 8 else 8 if len(trend_data.columns) <= 15 else 6
         
         line_chart.add_yaxis(
             series_name=str(sku),
-            y_axis=values,
+            y_axis=rounded_values,
             color=color,
             symbol="circle",
             symbol_size=symbol_size,
@@ -98,7 +108,8 @@ def create_trend_chart(comparison_data, metric, title):
                 data=[
                     opts.MarkPointItem(type_="max", name="最大值"),
                     opts.MarkPointItem(type_="min", name="最小值")
-                ]
+                ],
+                label_opts=opts.LabelOpts(is_show=True, font_size=10)
             ) if i < 5 and len(values) > 1 else None,
             label_opts=opts.LabelOpts(is_show=False),
         )

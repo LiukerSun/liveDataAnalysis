@@ -182,7 +182,14 @@ class DataLoader:
 
         # 计算讲解效率
         if "成交件数" in new_df.columns and "讲解次数" in new_df.columns:
-            new_df["成交件数/每次讲解"] = new_df["成交件数"] / new_df["讲解次数"]
+            new_df["成交件数/每次讲解"] = (new_df["成交件数"] / new_df["讲解次数"]).round(2)
+
+        # 计算单次讲解成交金额
+        if "用户支付金额" in new_df.columns and "讲解次数" in new_df.columns:
+            # 避免除零错误
+            mask = new_df["讲解次数"] > 0
+            new_df.loc[mask, "单次讲解成交金额"] = (new_df.loc[mask, "用户支付金额"] / new_df.loc[mask, "讲解次数"]).round(2)
+            new_df.loc[~mask, "单次讲解成交金额"] = 0
 
         # 删除商品名称列
         if "商品名称" in new_df.columns:
@@ -238,7 +245,19 @@ class DataLoader:
         ):
             self.aggregated_df["成交件数/每次讲解"] = (
                 self.aggregated_df["成交件数"] / self.aggregated_df["讲解次数"]
-            )
+            ).round(2)
+
+        # 重新计算单次讲解成交金额（聚合后重新计算，而不是取平均值）
+        if (
+            "用户支付金额" in self.aggregated_df.columns
+            and "讲解次数" in self.aggregated_df.columns
+        ):
+            # 避免除零错误
+            mask = self.aggregated_df["讲解次数"] > 0
+            self.aggregated_df.loc[mask, "单次讲解成交金额"] = (
+                self.aggregated_df.loc[mask, "用户支付金额"] / self.aggregated_df.loc[mask, "讲解次数"]
+            ).round(2)
+            self.aggregated_df.loc[~mask, "单次讲解成交金额"] = 0
 
         logger.info(f"SKU聚合完成，共 {len(self.aggregated_df)} 个SKU")
 
@@ -264,6 +283,7 @@ class DataLoader:
             "用户支付金额",
             "讲解次数",
             "成交件数/每次讲解",
+            "单次讲解成交金额",
         ]
 
         for col in numeric_cols:
